@@ -4,6 +4,7 @@ import numpy as np
 from itertools import permutations
 from multiprocessing import Pool, cpu_count
 from baseball import Hitter, Diamond
+import time
 
 # 데이터베이스 연결 및 테이블 생성
 def init_db():
@@ -85,11 +86,14 @@ def simulate_season_process(env, lineup, num_games, game_scores):
 
 def simulate_lineup(args):
     lineup_order, db_path = args
+    start_time = time.time()
     avg_score = simulate_season(lineup_order)
     lineup_str = ', '.join([player.name for player in lineup_order])
     conn = sqlite3.connect(db_path)
     save_result_to_db(conn, lineup_str, avg_score)
     conn.close()
+    end_time = time.time()
+    print(f"Completed lineup: {lineup_str}, Avg Score: {avg_score}, Time Taken: {end_time - start_time:.2f} seconds")
     return (lineup_str, avg_score)
 
 def find_optimal_lineup(players, conn):
