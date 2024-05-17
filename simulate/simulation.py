@@ -96,10 +96,10 @@ def simulate_lineup(args):
     print(f"Completed lineup: {lineup_str}, Avg Score: {avg_score}, Time Taken: {end_time - start_time:.2f} seconds")
     return (lineup_str, avg_score)
 
-def find_optimal_lineup(players, conn):
+def find_optimal_lineup(players, db_path):
     with Pool(processes=cpu_count()) as pool:
         permutations_list = list(permutations(players))
-        results = pool.map(simulate_lineup, [(lineup, 'simulation_results.db') for lineup in permutations_list])
+        results = pool.map(simulate_lineup, [(lineup, db_path) for lineup in permutations_list])
 
         best_lineup = None
         best_score = 0
@@ -127,10 +127,11 @@ players_data = [
 ]
 
 # 데이터베이스 초기화
+db_path = 'simulation_results.db'
 conn = init_db()
 conn.close()
 
 # 최적의 타순 찾기
-best_lineup, best_score = find_optimal_lineup(players_data, None)
+best_lineup, best_score = find_optimal_lineup(players_data, db_path)
 print("최적의 타순:", best_lineup)
 print("평균 득점:", best_score)
