@@ -3,6 +3,7 @@ import simpy
 import numpy as np
 from itertools import permutations
 from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import cpu_count
 from baseball import Hitter, Diamond
 import time
 import os
