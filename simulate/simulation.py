@@ -47,7 +47,7 @@ def save_result_to_db(db_path, lineup, average_score):
     conn.close()
 
 
-def save_game_log_to_db(db_path, game_id, log_entries):
+def save_game_log_to_db(db_path, log_entries):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.executemany(
@@ -140,10 +140,12 @@ def simulate_lineup(args):
 
     temp_file_path = os.path.join(temp_dir, f"{lineup_str.replace(', ', '_')}.txt")
     with open(temp_file_path, 'w') as f:
+        f.write(f"lineup,average_score\n")
         f.write(f"{lineup_str},{avg_score}\n")
 
     game_log_file_path = os.path.join(temp_dir, f"{lineup_str.replace(', ', '_')}_log.txt")
     with open(game_log_file_path, 'w') as f:
+        f.write(f"game_id,inning,at_bat_number,batter,event,score\n")
         for log_entry in game_log:
             f.write(','.join(map(str, log_entry)) + '\n')
 
@@ -193,36 +195,38 @@ def merge_results_from_temp_files(temp_dir, db_path):
         if temp_file.endswith('_log.txt'):
             game_log_entries = []
             with open(temp_file_path, 'r') as f:
+                next(f)  # Skip header
                 for line in f:
                     game_log_entries.append(tuple(line.strip().split(',')))
             save_game_log_to_db(db_path, game_log_entries)
-        else:
+        elif temp_file.endswith('.txt'):
             with open(temp_file_path, 'r') as f:
+                next(f)  # Skip header
                 for line in f:
-                    lineup, avg_score = line.strip().split(',')
+                    lineup, avg_score = line.strip().rsplit(',', 1)
                     save_result_to_db(db_path, lineup, float(avg_score))
 
 
 # 선수 데이터
 players_data = [
     Hitter("Ohtani Shohei", plate_appearance=639, at_bat=537, hit=138, double=26, triple=8, home_run=34, bb=96, hbp=5,
-           pace=0.4),
+           pace=0.6),
     Hitter("Mike Trout", plate_appearance=507, at_bat=438, hit=123, double=24, triple=1, home_run=40, bb=90, hbp=4,
-           pace=0.3),
+           pace=0.5),
     Hitter("Anthony Rendon", plate_appearance=248, at_bat=200, hit=49, double=10, triple=0, home_run=6, bb=23, hbp=1,
-           pace=0.2),
+           pace=0.4),
     Hitter("Albert Pujols", plate_appearance=296, at_bat=267, hit=65, double=11, triple=0, home_run=12, bb=14, hbp=5,
-           pace=0.1),
+           pace=0.2),
     Hitter("Justin Upton", plate_appearance=362, at_bat=274, hit=63, double=12, triple=0, home_run=17, bb=39, hbp=10,
-           pace=0.2),
-    Hitter("Jared Walsh", plate_appearance=454, at_bat=385, hit=98, double=27, triple=2, home_run=15, bb=45, hbp=4,
-           pace=0.2),
-    Hitter("David Fletcher", plate_appearance=665, at_bat=603, hit=157, double=26, triple=3, home_run=2, bb=28, hbp=3,
            pace=0.3),
+    Hitter("Jared Walsh", plate_appearance=454, at_bat=385, hit=98, double=27, triple=2, home_run=15, bb=45, hbp=4,
+           pace=0.3),
+    Hitter("David Fletcher", plate_appearance=665, at_bat=603, hit=157, double=26, triple=3, home_run=2, bb=28, hbp=3,
+           pace=0.5),
     Hitter("Max Stassi", plate_appearance=319, at_bat=272, hit=61, double=13, triple=1, home_run=13, bb=38, hbp=7,
-           pace=0.2),
+           pace=0.3),
     Hitter("Taylor Ward", plate_appearance=375, at_bat=324, hit=81, double=19, triple=0, home_run=8, bb=38, hbp=7,
-           pace=0.2)
+           pace=0.4)
 ]
 
 # 데이터베이스 경로 설정
