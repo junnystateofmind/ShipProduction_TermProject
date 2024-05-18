@@ -7,9 +7,12 @@ from baseball import Hitter, Diamond
 import time
 import os
 import tempfile
+import shutil
 
 
+# 데이터베이스 연결 및 테이블 생성
 def init_db(db_path):
+    # 디렉토리가 존재하지 않으면 생성
     db_dir = os.path.dirname(db_path)
     if not os.path.exists(db_dir):
         os.makedirs(db_dir)
@@ -22,6 +25,16 @@ def init_db(db_path):
             average_score REAL
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS game_log (
+            game_id INTEGER,
+            inning INTEGER,
+            at_bat_number INTEGER,
+            batter TEXT,
+            event TEXT,
+            score INTEGER
+        )
+    ''')
     conn.commit()
     return conn
 
@@ -30,6 +43,16 @@ def save_result_to_db(db_path, lineup, average_score):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute('INSERT INTO results (lineup, average_score) VALUES (?, ?)', (lineup, average_score))
+    conn.commit()
+    conn.close()
+
+
+def save_game_log_to_db(db_path, game_id, log_entries):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.executemany(
+        'INSERT INTO game_log (game_id, inning, at_bat_number, batter, event, score) VALUES (?, ?, ?, ?, ?, ?)',
+        log_entries)
     conn.commit()
     conn.close()
 
@@ -52,7 +75,7 @@ def simulate_at_bat(hitter):
         return 'out'
 
 
-def at_bat(env, diamond, lineup, current_batter_index):
+def at_bat(env, diamond, lineup, current_batter_index, inning, at_bat_number, game_id, game_log):
     hitter = lineup[current_batter_index]
     result = simulate_at_bat(hitter)
 
@@ -71,43 +94,58 @@ def at_bat(env, diamond, lineup, current_batter_index):
     else:
         diamond.out()
 
+    game_log.append((game_id, inning, at_bat_number, hitter.name, result, diamond.score))
     yield env.timeout(1)
 
 
-def game(env, lineup, game_scores):
+def game(env, lineup, game_scores, game_id, game_log):
     diamond = Diamond()
     current_batter_index = 0
+    inning = 1
+    at_bat_number = 1
+
     while diamond.outs < 27:
-        yield env.process(at_bat(env, diamond, lineup, current_batter_index))
+        yield env.process(at_bat(env, diamond, lineup, current_batter_index, inning, at_bat_number, game_id, game_log))
         current_batter_index = (current_batter_index + 1) % len(lineup)
+        if current_batter_index == 0:
+            inning += 1
+        at_bat_number += 1
         yield env.timeout(0.1)
 
     game_scores.append(diamond.score)
 
 
-def simulate_season(lineup):
+def simulate_season(lineup, game_id, game_log):
     game_scores = []
     env = simpy.Environment()
-    env.process(simulate_season_process(env, lineup, num_games=144, game_scores=game_scores))
+    env.process(simulate_season_process(env, lineup, num_games=144, game_scores=game_scores, game_id=game_id,
+                                        game_log=game_log))
     env.run()
     avg_score = np.mean(game_scores)
     return avg_score
 
 
-def simulate_season_process(env, lineup, num_games, game_scores):
-    for _ in range(num_games):
-        yield env.process(game(env, lineup, game_scores))
+def simulate_season_process(env, lineup, num_games, game_scores, game_id, game_log):
+    for i in range(num_games):
+        yield env.process(game(env, lineup, game_scores, game_id, game_log))
+        game_id += 1
 
 
 def simulate_lineup(args):
-    lineup_order, temp_dir = args
+    lineup_order, temp_dir, game_id_start = args
     start_time = time.time()
-    avg_score = simulate_season(lineup_order)
+    game_log = []
+    avg_score = simulate_season(lineup_order, game_id_start, game_log)
     lineup_str = ', '.join([player.name for player in lineup_order])
 
     temp_file_path = os.path.join(temp_dir, f"{lineup_str.replace(', ', '_')}.txt")
     with open(temp_file_path, 'w') as f:
         f.write(f"{lineup_str},{avg_score}\n")
+
+    game_log_file_path = os.path.join(temp_dir, f"{lineup_str.replace(', ', '_')}_log.txt")
+    with open(game_log_file_path, 'w') as f:
+        for log_entry in game_log:
+            f.write(','.join(map(str, log_entry)) + '\n')
 
     end_time = time.time()
     return (lineup_str, avg_score, end_time - start_time)
@@ -116,12 +154,14 @@ def simulate_lineup(args):
 def find_optimal_lineup(players, temp_dir):
     permutations_list = list(permutations(players))
     total_permutations = len(permutations_list)
+    game_id_start = 1
 
     with Pool(processes=cpu_count()) as pool:
         results = []
         start_time = time.time()
 
-        futures = [pool.apply_async(simulate_lineup, [(lineup, temp_dir)]) for lineup in permutations_list]
+        futures = [pool.apply_async(simulate_lineup, [(lineup, temp_dir, game_id_start + i * 144)]) for i, lineup in
+                   enumerate(permutations_list)]
         for i, future in enumerate(futures):
             result = future.get()
             results.append(result)
@@ -150,10 +190,17 @@ def find_optimal_lineup(players, temp_dir):
 def merge_results_from_temp_files(temp_dir, db_path):
     for temp_file in os.listdir(temp_dir):
         temp_file_path = os.path.join(temp_dir, temp_file)
-        with open(temp_file_path, 'r') as f:
-            for line in f:
-                lineup, avg_score = line.strip().split(',')
-                save_result_to_db(db_path, lineup, float(avg_score))
+        if temp_file.endswith('_log.txt'):
+            game_log_entries = []
+            with open(temp_file_path, 'r') as f:
+                for line in f:
+                    game_log_entries.append(tuple(line.strip().split(',')))
+            save_game_log_to_db(db_path, game_log_entries)
+        else:
+            with open(temp_file_path, 'r') as f:
+                for line in f:
+                    lineup, avg_score = line.strip().split(',')
+                    save_result_to_db(db_path, lineup, float(avg_score))
 
 
 # 선수 데이터
@@ -180,19 +227,21 @@ players_data = [
 
 # 데이터베이스 경로 설정
 db_path = '../database/simulation_results.db'
-temp_dir = tempfile.mkdtemp()
 
 # 데이터베이스 초기화
 conn = init_db(db_path)
 conn.close()
 
+# 임시 파일 디렉토리 생성
+temp_dir = tempfile.mkdtemp()
+
 # 최적의 타순 찾기
 best_lineup, best_score = find_optimal_lineup(players_data, temp_dir)
-merge_results_from_temp_files(temp_dir, db_path)
 print("최적의 타순:", best_lineup)
 print("평균 득점:", best_score)
 
-# 임시 파일 삭제
-import shutil
+# 임시 파일에서 결과 병합
+merge_results_from_temp_files(temp_dir, db_path)
 
+# 임시 파일 삭제
 shutil.rmtree(temp_dir)
