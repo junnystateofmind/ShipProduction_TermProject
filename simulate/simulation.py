@@ -2,21 +2,19 @@ import sqlite3
 import simpy
 import numpy as np
 from itertools import permutations
-from concurrent.futures import ThreadPoolExecutor
-from multiprocessing import cpu_count
+from multiprocessing import Pool, cpu_count
 from baseball import Hitter, Diamond
 import time
 import os
-import threading
+import tempfile
 
-# 데이터베이스 연결 및 테이블 생성
+
 def init_db(db_path):
-    # 디렉토리가 존재하지 않으면 생성
     db_dir = os.path.dirname(db_path)
     if not os.path.exists(db_dir):
         os.makedirs(db_dir)
 
-    conn = sqlite3.connect(db_path, check_same_thread=False)
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS results (
@@ -27,16 +25,14 @@ def init_db(db_path):
     conn.commit()
     return conn
 
-# 데이터베이스 연결을 동기화하기 위한 잠금
-db_lock = threading.Lock()
 
 def save_result_to_db(db_path, lineup, average_score):
-    with db_lock:
-        conn = sqlite3.connect(db_path, check_same_thread=False)
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO results (lineup, average_score) VALUES (?, ?)', (lineup, average_score))
-        conn.commit()
-        conn.close()
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute('INSERT INTO results (lineup, average_score) VALUES (?, ?)', (lineup, average_score))
+    conn.commit()
+    conn.close()
+
 
 def simulate_at_bat(hitter):
     result = np.random.rand()
@@ -54,6 +50,7 @@ def simulate_at_bat(hitter):
         return 'hit_by_pitch'
     else:
         return 'out'
+
 
 def at_bat(env, diamond, lineup, current_batter_index):
     hitter = lineup[current_batter_index]
@@ -74,7 +71,8 @@ def at_bat(env, diamond, lineup, current_batter_index):
     else:
         diamond.out()
 
-    yield env.timeout(1)  # 각 타석 간의 간격을 시뮬레이션 (여기서는 단순히 1로 설정)
+    yield env.timeout(1)
+
 
 def game(env, lineup, game_scores):
     diamond = Diamond()
@@ -82,9 +80,10 @@ def game(env, lineup, game_scores):
     while diamond.outs < 27:
         yield env.process(at_bat(env, diamond, lineup, current_batter_index))
         current_batter_index = (current_batter_index + 1) % len(lineup)
-        yield env.timeout(0.1)  # 각 타석 간의 시간 간격 (여기서는 0.1로 설정)
+        yield env.timeout(0.1)
 
     game_scores.append(diamond.score)
+
 
 def simulate_season(lineup):
     game_scores = []
@@ -94,34 +93,40 @@ def simulate_season(lineup):
     avg_score = np.mean(game_scores)
     return avg_score
 
+
 def simulate_season_process(env, lineup, num_games, game_scores):
     for _ in range(num_games):
         yield env.process(game(env, lineup, game_scores))
 
+
 def simulate_lineup(args):
-    lineup_order, db_path = args
+    lineup_order, temp_dir = args
     start_time = time.time()
     avg_score = simulate_season(lineup_order)
     lineup_str = ', '.join([player.name for player in lineup_order])
-    save_result_to_db(db_path, lineup_str, avg_score)
+
+    temp_file_path = os.path.join(temp_dir, f"{lineup_str.replace(', ', '_')}.txt")
+    with open(temp_file_path, 'w') as f:
+        f.write(f"{lineup_str},{avg_score}\n")
+
     end_time = time.time()
     return (lineup_str, avg_score, end_time - start_time)
 
-def find_optimal_lineup(players, db_path):
+
+def find_optimal_lineup(players, temp_dir):
     permutations_list = list(permutations(players))
     total_permutations = len(permutations_list)
 
-    with ThreadPoolExecutor(max_workers=cpu_count()) as executor:
+    with Pool(processes=cpu_count()) as pool:
         results = []
         start_time = time.time()
 
-        futures = [executor.submit(simulate_lineup, (lineup, db_path)) for lineup in permutations_list]
+        futures = [pool.apply_async(simulate_lineup, [(lineup, temp_dir)]) for lineup in permutations_list]
         for i, future in enumerate(futures):
-            result = future.result()
+            result = future.get()
             results.append(result)
             lineup_str, avg_score, elapsed_time = result
 
-            # 진행률 계산 및 출력
             progress = (i + 1) / total_permutations
             elapsed_total_time = time.time() - start_time
             estimated_total_time = elapsed_total_time / progress
@@ -141,27 +146,53 @@ def find_optimal_lineup(players, db_path):
 
     return best_lineup, best_score
 
+
+def merge_results_from_temp_files(temp_dir, db_path):
+    for temp_file in os.listdir(temp_dir):
+        temp_file_path = os.path.join(temp_dir, temp_file)
+        with open(temp_file_path, 'r') as f:
+            for line in f:
+                lineup, avg_score = line.strip().split(',')
+                save_result_to_db(db_path, lineup, float(avg_score))
+
+
 # 선수 데이터
 players_data = [
-    Hitter("Ohtani Shohei", plate_appearance=639, at_bat=537, hit=138, double=26, triple=8, home_run=34, bb=96, hbp=5, pace=0.6),
-    Hitter("Mike Trout", plate_appearance=507, at_bat=438, hit=123, double=24, triple=1, home_run=40, bb=90, hbp=4, pace=0.5),
-    Hitter("Anthony Rendon", plate_appearance=248, at_bat=200, hit=49, double=10, triple=0, home_run=6, bb=23, hbp=1, pace=0.4),
-    Hitter("Albert Pujols", plate_appearance=296, at_bat=267, hit=65, double=11, triple=0, home_run=12, bb=14, hbp=5, pace=0.2),
-    Hitter("Justin Upton", plate_appearance=362, at_bat=274, hit=63, double=12, triple=0, home_run=17, bb=39, hbp=10, pace=0.3),
-    Hitter("Jared Walsh", plate_appearance=454, at_bat=385, hit=98, double=27, triple=2, home_run=15, bb=45, hbp=4, pace=0.3),
-    Hitter("David Fletcher", plate_appearance=665, at_bat=603, hit=157, double=26, triple=3, home_run=2, bb=28, hbp=3, pace=0.5),
-    Hitter("Max Stassi", plate_appearance=319, at_bat=272, hit=61, double=13, triple=1, home_run=13, bb=38, hbp=7, pace=0.3),
-    Hitter("Taylor Ward", plate_appearance=375, at_bat=324, hit=81, double=19, triple=0, home_run=8, bb=38, hbp=7, pace=0.4)
+    Hitter("Ohtani Shohei", plate_appearance=639, at_bat=537, hit=138, double=26, triple=8, home_run=34, bb=96, hbp=5,
+           pace=0.6),
+    Hitter("Mike Trout", plate_appearance=507, at_bat=438, hit=123, double=24, triple=1, home_run=40, bb=90, hbp=4,
+           pace=0.5),
+    Hitter("Anthony Rendon", plate_appearance=248, at_bat=200, hit=49, double=10, triple=0, home_run=6, bb=23, hbp=1,
+           pace=0.4),
+    Hitter("Albert Pujols", plate_appearance=296, at_bat=267, hit=65, double=11, triple=0, home_run=12, bb=14, hbp=5,
+           pace=0.2),
+    Hitter("Justin Upton", plate_appearance=362, at_bat=274, hit=63, double=12, triple=0, home_run=17, bb=39, hbp=10,
+           pace=0.3),
+    Hitter("Jared Walsh", plate_appearance=454, at_bat=385, hit=98, double=27, triple=2, home_run=15, bb=45, hbp=4,
+           pace=0.3),
+    Hitter("David Fletcher", plate_appearance=665, at_bat=603, hit=157, double=26, triple=3, home_run=2, bb=28, hbp=3,
+           pace=0.5),
+    Hitter("Max Stassi", plate_appearance=319, at_bat=272, hit=61, double=13, triple=1, home_run=13, bb=38, hbp=7,
+           pace=0.3),
+    Hitter("Taylor Ward", plate_appearance=375, at_bat=324, hit=81, double=19, triple=0, home_run=8, bb=38, hbp=7,
+           pace=0.4)
 ]
 
 # 데이터베이스 경로 설정
 db_path = '../database/simulation_results.db'
+temp_dir = tempfile.mkdtemp()
 
 # 데이터베이스 초기화
 conn = init_db(db_path)
 conn.close()
 
 # 최적의 타순 찾기
-best_lineup, best_score = find_optimal_lineup(players_data, db_path)
+best_lineup, best_score = find_optimal_lineup(players_data, temp_dir)
+merge_results_from_temp_files(temp_dir, db_path)
 print("최적의 타순:", best_lineup)
 print("평균 득점:", best_score)
+
+# 임시 파일 삭제
+import shutil
+
+shutil.rmtree(temp_dir)
