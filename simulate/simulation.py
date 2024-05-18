@@ -27,10 +27,12 @@ def init_db(db_path):
     return conn
 
 
-def save_result_to_db(conn, lineup, average_score):
+def save_result_to_db(db_path, lineup, average_score):
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.execute('INSERT INTO results (lineup, average_score) VALUES (?, ?)', (lineup, average_score))
     conn.commit()
+    conn.close()
 
 
 def simulate_at_bat(hitter):
@@ -87,7 +89,7 @@ def game(env, lineup, game_scores):
 def simulate_season(lineup):
     game_scores = []
     env = simpy.Environment()
-    env.process(simulate_season_process(env, lineup, num_games=5, game_scores=game_scores))
+    env.process(simulate_season_process(env, lineup, num_games=144, game_scores=game_scores))
     env.run()
     avg_score = np.mean(game_scores)
     return avg_score
@@ -103,9 +105,7 @@ def simulate_lineup(args):
     start_time = time.time()
     avg_score = simulate_season(lineup_order)
     lineup_str = ', '.join([player.name for player in lineup_order])
-    conn = sqlite3.connect(db_path)
-    save_result_to_db(conn, lineup_str, avg_score)
-    conn.close()
+    save_result_to_db(db_path, lineup_str, avg_score)
     end_time = time.time()
     return (lineup_str, avg_score, end_time - start_time)
 
