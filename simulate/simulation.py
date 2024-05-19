@@ -9,7 +9,6 @@ import os
 import tempfile
 import shutil
 
-
 # 데이터베이스 연결 및 테이블 생성
 def init_db(db_path):
     # 디렉토리가 존재하지 않으면 생성
@@ -38,42 +37,21 @@ def init_db(db_path):
     conn.commit()
     return conn
 
-
 def save_result_to_db(db_path, lineup, average_score):
-    max_retries = 5
-    for attempt in range(max_retries):
-        try:
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            cursor.execute('INSERT INTO results (lineup, average_score) VALUES (?, ?)', (lineup, average_score))
-            conn.commit()
-            conn.close()
-            break
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e):
-                time.sleep(0.1)  # 잠시 대기 후 재시도
-            else:
-                raise
-
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute('INSERT INTO results (lineup, average_score) VALUES (?, ?)', (lineup, average_score))
+    conn.commit()
+    conn.close()
 
 def save_game_log_to_db(db_path, log_entries):
-    max_retries = 5
-    for attempt in range(max_retries):
-        try:
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
-            cursor.executemany(
-                'INSERT INTO game_log (game_id, inning, at_bat_number, batter, event, score) VALUES (?, ?, ?, ?, ?, ?)',
-                log_entries)
-            conn.commit()
-            conn.close()
-            break
-        except sqlite3.OperationalError as e:
-            if "database is locked" in str(e):
-                time.sleep(0.1)  # 잠시 대기 후 재시도
-            else:
-                raise
-
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.executemany(
+        'INSERT INTO game_log (game_id, inning, at_bat_number, batter, event, score) VALUES (?, ?, ?, ?, ?, ?)',
+        log_entries)
+    conn.commit()
+    conn.close()
 
 def simulate_at_bat(hitter):
     result = np.random.rand()
@@ -91,7 +69,6 @@ def simulate_at_bat(hitter):
         return 'hit_by_pitch'
     else:
         return 'out'
-
 
 def at_bat(env, diamond, lineup, current_batter_index, inning, at_bat_number, game_id, game_log):
     hitter = lineup[current_batter_index]
@@ -115,7 +92,6 @@ def at_bat(env, diamond, lineup, current_batter_index, inning, at_bat_number, ga
     game_log.append((game_id, inning, at_bat_number, hitter.name, result, diamond.score))
     yield env.timeout(1)
 
-
 def game(env, lineup, game_scores, game_id, game_log):
     diamond = Diamond()
     current_batter_index = 0
@@ -132,22 +108,18 @@ def game(env, lineup, game_scores, game_id, game_log):
 
     game_scores.append(diamond.score)
 
-
 def simulate_season(lineup, game_id, game_log):
     game_scores = []
     env = simpy.Environment()
-    env.process(simulate_season_process(env, lineup, num_games=144, game_scores=game_scores, game_id=game_id,
-                                        game_log=game_log))
+    env.process(simulate_season_process(env, lineup, num_games=144, game_scores=game_scores, game_id=game_id, game_log=game_log))
     env.run()
     avg_score = np.mean(game_scores)
     return avg_score
-
 
 def simulate_season_process(env, lineup, num_games, game_scores, game_id, game_log):
     for i in range(num_games):
         yield env.process(game(env, lineup, game_scores, game_id, game_log))
         game_id += 1
-
 
 def simulate_lineup(args):
     lineup_order, temp_dir, game_id_start = args
@@ -170,7 +142,6 @@ def simulate_lineup(args):
     end_time = time.time()
     return (lineup_str, avg_score, end_time - start_time)
 
-
 def find_optimal_lineup(players, temp_dir):
     permutations_list = list(permutations(players))
     total_permutations = len(permutations_list)
@@ -180,8 +151,7 @@ def find_optimal_lineup(players, temp_dir):
         results = []
         start_time = time.time()
 
-        futures = [pool.apply_async(simulate_lineup, [(lineup, temp_dir, game_id_start + i * 144)]) for i, lineup in
-                   enumerate(permutations_list)]
+        futures = [pool.apply_async(simulate_lineup, [(lineup, temp_dir, game_id_start + i * 144)]) for i, lineup in enumerate(permutations_list)]
         for i, future in enumerate(futures):
             result = future.get()
             results.append(result)
@@ -206,7 +176,6 @@ def find_optimal_lineup(players, temp_dir):
 
     return best_lineup, best_score
 
-
 def merge_results_from_temp_files(temp_dir, db_path):
     for temp_file in os.listdir(temp_dir):
         temp_file_path = os.path.join(temp_dir, temp_file)
@@ -224,27 +193,17 @@ def merge_results_from_temp_files(temp_dir, db_path):
                     lineup, avg_score = line.strip().rsplit(',', 1)
                     save_result_to_db(db_path, lineup, float(avg_score))
 
-
 # 선수 데이터
 players_data = [
-    Hitter("Ohtani Shohei", plate_appearance=639, at_bat=537, hit=138, double=26, triple=8, home_run=34, bb=96, hbp=5,
-           pace=0.4),
-    Hitter("Mike Trout", plate_appearance=507, at_bat=438, hit=123, double=24, triple=1, home_run=40, bb=90, hbp=4,
-           pace=0.3),
-    Hitter("Anthony Rendon", plate_appearance=248, at_bat=200, hit=49, double=10, triple=0, home_run=6, bb=23, hbp=1,
-           pace=0.3),
-    Hitter("Albert Pujols", plate_appearance=296, at_bat=267, hit=65, double=11, triple=0, home_run=12, bb=14, hbp=5,
-           pace=0.1),
-    Hitter("Justin Upton", plate_appearance=362, at_bat=274, hit=63, double=12, triple=0, home_run=17, bb=39, hbp=10,
-           pace=0.2),
-    Hitter("Jared Walsh", plate_appearance=454, at_bat=385, hit=98, double=27, triple=2, home_run=15, bb=45, hbp=4,
-           pace=0.1),
-    Hitter("David Fletcher", plate_appearance=665, at_bat=603, hit=157, double=26, triple=3, home_run=2, bb=28, hbp=3,
-           pace=0.2),
-    Hitter("Max Stassi", plate_appearance=319, at_bat=272, hit=61, double=13, triple=1, home_run=13, bb=38, hbp=7,
-           pace=0.1),
-    Hitter("Taylor Ward", plate_appearance=375, at_bat=324, hit=81, double=19, triple=0, home_run=8, bb=38, hbp=7,
-           pace=0.2)
+    Hitter("Ohtani Shohei", plate_appearance=639, at_bat=537, hit=138, double=26, triple=8, home_run=34, bb=96, hbp=5, pace=0.4),
+    Hitter("Mike Trout", plate_appearance=507, at_bat=438, hit=123, double=24, triple=1, home_run=40, bb=90, hbp=4, pace=0.3),
+    Hitter("Anthony Rendon", plate_appearance=248, at_bat=200, hit=49, double=10, triple=0, home_run=6, bb=23, hbp=1, pace=0.3),
+    Hitter("Albert Pujols", plate_appearance=296, at_bat=267, hit=65, double=11, triple=0, home_run=12, bb=14, hbp=5, pace=0.1),
+    Hitter("Justin Upton", plate_appearance=362, at_bat=274, hit=63, double=12, triple=0, home_run=17, bb=39, hbp=10, pace=0.2),
+    Hitter("Jared Walsh", plate_appearance=454, at_bat=385, hit=98, double=27, triple=2, home_run=15, bb=45, hbp=4, pace=0.1),
+    Hitter("David Fletcher", plate_appearance=665, at_bat=603, hit=157, double=26, triple=3, home_run=2, bb=28, hbp=3, pace=0.2),
+    Hitter("Max Stassi", plate_appearance=319, at_bat=272, hit=61, double=13, triple=1, home_run=13, bb=38, hbp=7, pace=0.1),
+    Hitter("Taylor Ward", plate_appearance=375, at_bat=324, hit=81, double=19, triple=0, home_run=8, bb=38, hbp=7, pace=0.2)
 ]
 
 # 데이터베이스 경로 설정
@@ -267,3 +226,36 @@ merge_results_from_temp_files(temp_dir, db_path)
 
 # 임시 파일 삭제
 shutil.rmtree(temp_dir)
+
+# 데이터베이스 결과 확인
+def print_results(db_path, limit=10):
+    if not os.path.exists(db_path):
+        raise FileNotFoundError(f"Database file not found at {db_path}")
+
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        # Print results table
+        print("Results Table:")
+        cursor.execute(f'SELECT * FROM results LIMIT {limit}')
+        results = cursor.fetchall()
+        for row in results:
+            print(row)
+
+        # Print game_log table
+        print("\nGame Log Table:")
+        cursor.execute(f'SELECT * FROM game_log LIMIT {limit}')
+        game_log = cursor.fetchall()
+        for row in game_log:
+            print(row)
+
+        conn.close()
+    except sqlite3.OperationalError as e:
+        print(f"OperationalError: {e}")
+
+# 데이터베이스 경로 설정
+db_path = '../database/simulation_results.db'
+
+# 데이터베이스 내용 출력
+print_results(db_path, limit=10)
