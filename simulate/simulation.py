@@ -40,21 +40,39 @@ def init_db(db_path):
 
 
 def save_result_to_db(db_path, lineup, average_score):
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.execute('INSERT INTO results (lineup, average_score) VALUES (?, ?)', (lineup, average_score))
-    conn.commit()
-    conn.close()
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO results (lineup, average_score) VALUES (?, ?)', (lineup, average_score))
+            conn.commit()
+            conn.close()
+            break
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                time.sleep(0.1)  # 잠시 대기 후 재시도
+            else:
+                raise
 
 
 def save_game_log_to_db(db_path, log_entries):
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    cursor.executemany(
-        'INSERT INTO game_log (game_id, inning, at_bat_number, batter, event, score) VALUES (?, ?, ?, ?, ?, ?)',
-        log_entries)
-    conn.commit()
-    conn.close()
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+            cursor.executemany(
+                'INSERT INTO game_log (game_id, inning, at_bat_number, batter, event, score) VALUES (?, ?, ?, ?, ?, ?)',
+                log_entries)
+            conn.commit()
+            conn.close()
+            break
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                time.sleep(0.1)  # 잠시 대기 후 재시도
+            else:
+                raise
 
 
 def simulate_at_bat(hitter):
@@ -215,7 +233,7 @@ players_data = [
            pace=0.3),
     Hitter("Anthony Rendon", plate_appearance=248, at_bat=200, hit=49, double=10, triple=0, home_run=6, bb=23, hbp=1,
            pace=0.3),
-    Hitter("lbert Pujols", plate_appearance=296, at_bat=267, hit=65, double=11, triple=0, home_run=12, bb=14, hbp=5,
+    Hitter("Albert Pujols", plate_appearance=296, at_bat=267, hit=65, double=11, triple=0, home_run=12, bb=14, hbp=5,
            pace=0.1),
     Hitter("Justin Upton", plate_appearance=362, at_bat=274, hit=63, double=12, triple=0, home_run=17, bb=39, hbp=10,
            pace=0.2),
