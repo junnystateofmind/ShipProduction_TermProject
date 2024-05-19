@@ -9,6 +9,7 @@ import os
 import tempfile
 import shutil
 
+
 # 데이터베이스 연결 및 테이블 생성
 def init_db(db_path):
     # 디렉토리가 존재하지 않으면 생성
@@ -25,7 +26,7 @@ def init_db(db_path):
         )
     ''')
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS game_log (
+        CREATE TABLE IF NOT EXISTS inning_log (
             game_id INTEGER,
             inning INTEGER,
             at_bat_number INTEGER,
@@ -37,6 +38,7 @@ def init_db(db_path):
     conn.commit()
     return conn
 
+
 def save_result_to_db(db_path, lineup, average_score):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -44,14 +46,16 @@ def save_result_to_db(db_path, lineup, average_score):
     conn.commit()
     conn.close()
 
-def save_game_log_to_db(db_path, log_entries):
+
+def save_inning_log_to_db(db_path, log_entries):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     cursor.executemany(
-        'INSERT INTO game_log (game_id, inning, at_bat_number, batter, event, score) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO inning_log (game_id, inning, at_bat_number, batter, event, score) VALUES (?, ?, ?, ?, ?, ?)',
         log_entries)
     conn.commit()
     conn.close()
+
 
 def simulate_at_bat(hitter):
     result = np.random.rand()
@@ -70,7 +74,8 @@ def simulate_at_bat(hitter):
     else:
         return 'out'
 
-def at_bat(env, diamond, lineup, current_batter_index, inning, at_bat_number, game_id, game_log):
+
+def at_bat(env, diamond, lineup, current_batter_index, inning, at_bat_number, game_id, inning_log):
     hitter = lineup[current_batter_index]
     result = simulate_at_bat(hitter)
 
@@ -89,43 +94,40 @@ def at_bat(env, diamond, lineup, current_batter_index, inning, at_bat_number, ga
     else:
         diamond.out()
 
-    game_log.append((game_id, inning, at_bat_number, hitter.name, result, diamond.score))
+    inning_log.append((game_id, inning, at_bat_number, hitter.name, result, diamond.score))
     yield env.timeout(1)
 
-def game(env, lineup, game_scores, game_id, game_log):
+
+def simulate_inning(env, lineup, inning_scores, game_id, inning_log):
     diamond = Diamond()
     current_batter_index = 0
     inning = 1
     at_bat_number = 1
 
-    while diamond.outs < 27:
-        yield env.process(at_bat(env, diamond, lineup, current_batter_index, inning, at_bat_number, game_id, game_log))
+    while diamond.outs < 3:
+        yield env.process(at_bat(env, diamond, lineup, current_batter_index, inning, at_bat_number, game_id, inning_log))
         current_batter_index = (current_batter_index + 1) % len(lineup)
-        if current_batter_index == 0:
-            inning += 1
         at_bat_number += 1
         yield env.timeout(0.1)
 
-    game_scores.append(diamond.score)
+    inning_scores.append(diamond.score)
 
-def simulate_season(lineup, game_id, game_log):
-    game_scores = []
+
+def simulate_game(lineup, game_id, inning_log):
+    inning_scores = []
     env = simpy.Environment()
-    env.process(simulate_season_process(env, lineup, num_games=144, game_scores=game_scores, game_id=game_id, game_log=game_log))
-    env.run()
-    avg_score = np.mean(game_scores)
+    for inning in range(1, 10):  # 9이닝 시뮬레이션
+        env.process(simulate_inning(env, lineup, inning_scores, game_id, inning_log))
+        env.run()
+    avg_score = np.mean(inning_scores)
     return avg_score
 
-def simulate_season_process(env, lineup, num_games, game_scores, game_id, game_log):
-    for i in range(num_games):
-        yield env.process(game(env, lineup, game_scores, game_id, game_log))
-        game_id += 1
 
 def simulate_lineup(args):
     lineup_order, temp_dir, game_id_start = args
     start_time = time.time()
-    game_log = []
-    avg_score = simulate_season(lineup_order, game_id_start, game_log)
+    inning_log = []
+    avg_score = simulate_game(lineup_order, game_id_start, inning_log)
     lineup_str = ', '.join([player.name for player in lineup_order])
 
     temp_file_path = os.path.join(temp_dir, f"{lineup_str.replace(', ', '_')}.txt")
@@ -133,14 +135,15 @@ def simulate_lineup(args):
         f.write(f"lineup,average_score\n")
         f.write(f"{lineup_str},{avg_score}\n")
 
-    game_log_file_path = os.path.join(temp_dir, f"{lineup_str.replace(', ', '_')}_log.txt")
-    with open(game_log_file_path, 'w') as f:
+    inning_log_file_path = os.path.join(temp_dir, f"{lineup_str.replace(', ', '_')}_log.txt")
+    with open(inning_log_file_path, 'w') as f:
         f.write(f"game_id,inning,at_bat_number,batter,event,score\n")
-        for log_entry in game_log:
+        for log_entry in inning_log:
             f.write(','.join(map(str, log_entry)) + '\n')
 
     end_time = time.time()
     return (lineup_str, avg_score, end_time - start_time)
+
 
 def find_optimal_lineup(players, temp_dir):
     permutations_list = list(permutations(players))
@@ -151,7 +154,8 @@ def find_optimal_lineup(players, temp_dir):
         results = []
         start_time = time.time()
 
-        futures = [pool.apply_async(simulate_lineup, [(lineup, temp_dir, game_id_start + i * 144)]) for i, lineup in enumerate(permutations_list)]
+        futures = [pool.apply_async(simulate_lineup, [(lineup, temp_dir, game_id_start + i * 144)]) for i, lineup in
+                   enumerate(permutations_list)]
         for i, future in enumerate(futures):
             result = future.get()
             results.append(result)
@@ -176,16 +180,17 @@ def find_optimal_lineup(players, temp_dir):
 
     return best_lineup, best_score
 
+
 def merge_results_from_temp_files(temp_dir, db_path):
     for temp_file in os.listdir(temp_dir):
         temp_file_path = os.path.join(temp_dir, temp_file)
         if temp_file.endswith('_log.txt'):
-            game_log_entries = []
+            inning_log_entries = []
             with open(temp_file_path, 'r') as f:
                 next(f)  # Skip header
                 for line in f:
-                    game_log_entries.append(tuple(line.strip().split(',')))
-            save_game_log_to_db(db_path, game_log_entries)
+                    inning_log_entries.append(tuple(line.strip().split(',')))
+            save_inning_log_to_db(db_path, inning_log_entries)
         elif temp_file.endswith('.txt'):
             with open(temp_file_path, 'r') as f:
                 next(f)  # Skip header
@@ -193,17 +198,27 @@ def merge_results_from_temp_files(temp_dir, db_path):
                     lineup, avg_score = line.strip().rsplit(',', 1)
                     save_result_to_db(db_path, lineup, float(avg_score))
 
+
 # 선수 데이터
 players_data = [
-    Hitter("Ohtani Shohei", plate_appearance=639, at_bat=537, hit=138, double=26, triple=8, home_run=34, bb=96, hbp=5, pace=0.4),
-    Hitter("Mike Trout", plate_appearance=507, at_bat=438, hit=123, double=24, triple=1, home_run=40, bb=90, hbp=4, pace=0.3),
-    Hitter("Anthony Rendon", plate_appearance=248, at_bat=200, hit=49, double=10, triple=0, home_run=6, bb=23, hbp=1, pace=0.3),
-    Hitter("Albert Pujols", plate_appearance=296, at_bat=267, hit=65, double=11, triple=0, home_run=12, bb=14, hbp=5, pace=0.1),
-    Hitter("Justin Upton", plate_appearance=362, at_bat=274, hit=63, double=12, triple=0, home_run=17, bb=39, hbp=10, pace=0.2),
-    Hitter("Jared Walsh", plate_appearance=454, at_bat=385, hit=98, double=27, triple=2, home_run=15, bb=45, hbp=4, pace=0.1),
-    Hitter("David Fletcher", plate_appearance=665, at_bat=603, hit=157, double=26, triple=3, home_run=2, bb=28, hbp=3, pace=0.2),
-    Hitter("Max Stassi", plate_appearance=319, at_bat=272, hit=61, double=13, triple=1, home_run=13, bb=38, hbp=7, pace=0.1),
-    Hitter("Taylor Ward", plate_appearance=375, at_bat=324, hit=81, double=19, triple=0, home_run=8, bb=38, hbp=7, pace=0.2)
+    Hitter("Ohtani Shohei", plate_appearance=639, at_bat=537, hit=138, double=26, triple=8, home_run=34, bb=96, hbp=5,
+           pace=0.4),
+    Hitter("Mike Trout", plate_appearance=507, at_bat=438, hit=123, double=24, triple=1, home_run=40, bb=90, hbp=4,
+           pace=0.3),
+    Hitter("Anthony Rendon", plate_appearance=248, at_bat=200, hit=49, double=10, triple=0, home_run=6, bb=23, hbp=1,
+           pace=0.3),
+    Hitter("Albert Pujols", plate_appearance=296, at_bat=267, hit=65, double=11, triple=0, home_run=12, bb=14, hbp=5,
+           pace=0.1),
+    Hitter("Justin Upton", plate_appearance=362, at_bat=274, hit=63, double=12, triple=0, home_run=17, bb=39, hbp=10,
+           pace=0.2),
+    Hitter("Jared Walsh", plate_appearance=454, at_bat=385, hit=98, double=27, triple=2, home_run=15, bb=45, hbp=4,
+           pace=0.1),
+    Hitter("David Fletcher", plate_appearance=665, at_bat=603, hit=157, double=26, triple=3, home_run=2, bb=28, hbp=3,
+           pace=0.2),
+    Hitter("Max Stassi", plate_appearance=319, at_bat=272, hit=61, double=13, triple=1, home_run=13, bb=38, hbp=7,
+           pace=0.1),
+    Hitter("Taylor Ward", plate_appearance=375, at_bat=324, hit=81, double=19, triple=0, home_run=8, bb=38, hbp=7,
+           pace=0.2)
 ]
 
 # 데이터베이스 경로 설정
@@ -244,8 +259,8 @@ def print_results(db_path, limit=10):
             print(row)
 
         # Print game_log table
-        print("\nGame Log Table:")
-        cursor.execute(f'SELECT * FROM game_log LIMIT {limit}')
+        print("\nInning Log Table:")
+        cursor.execute(f'SELECT * FROM inning_log LIMIT {limit}')
         game_log = cursor.fetchall()
         for row in game_log:
             print(row)
