@@ -116,10 +116,10 @@ def simulate_inning(env, lineup, inning_scores, game_id, inning_log):
 def simulate_game(lineup, game_id, inning_log):
     inning_scores = []
     env = simpy.Environment()
-    for inning in range(1, 10):  # 9이닝 시뮬레이션
+    for inning in range(1, 541): # 9 이닝 * 60 경기
         env.process(simulate_inning(env, lineup, inning_scores, game_id, inning_log))
         env.run()
-    avg_score = np.mean(inning_scores)
+    avg_score = np.mean(inning_scores) * 9
     return avg_score
 
 
@@ -201,24 +201,15 @@ def merge_results_from_temp_files(temp_dir, db_path):
 
 # 선수 데이터
 players_data = [
-    Hitter("Ohtani Shohei", plate_appearance=639, at_bat=537, hit=138, double=26, triple=8, home_run=34, bb=96, hbp=5,
-           pace=0.4),
-    Hitter("Mike Trout", plate_appearance=507, at_bat=438, hit=123, double=24, triple=1, home_run=40, bb=90, hbp=4,
-           pace=0.3),
-    Hitter("Anthony Rendon", plate_appearance=248, at_bat=200, hit=49, double=10, triple=0, home_run=6, bb=23, hbp=1,
-           pace=0.3),
-    Hitter("Albert Pujols", plate_appearance=296, at_bat=267, hit=65, double=11, triple=0, home_run=12, bb=14, hbp=5,
-           pace=0.1),
-    Hitter("Justin Upton", plate_appearance=362, at_bat=274, hit=63, double=12, triple=0, home_run=17, bb=39, hbp=10,
-           pace=0.2),
-    Hitter("Jared Walsh", plate_appearance=454, at_bat=385, hit=98, double=27, triple=2, home_run=15, bb=45, hbp=4,
-           pace=0.1),
-    Hitter("David Fletcher", plate_appearance=665, at_bat=603, hit=157, double=26, triple=3, home_run=2, bb=28, hbp=3,
-           pace=0.2),
-    Hitter("Max Stassi", plate_appearance=319, at_bat=272, hit=61, double=13, triple=1, home_run=13, bb=38, hbp=7,
-           pace=0.1),
-    Hitter("Taylor Ward", plate_appearance=375, at_bat=324, hit=81, double=19, triple=0, home_run=8, bb=38, hbp=7,
-           pace=0.2)
+    Hitter("호세 페르난데스", plate_appearance=600, at_bat=550, hit=170, double=25, triple=1, home_run=14, bb=45, hbp=5, pace=0.2),
+    Hitter("양의지", plate_appearance=520, at_bat=470, hit=153, double=30, triple=1, home_run=18, bb=40, hbp=3, pace=0.2),
+    Hitter("양석환", plate_appearance=540, at_bat=490, hit=130, double=20, triple=0, home_run=25, bb=40, hbp=2, pace=0.1),
+    Hitter("김재환", plate_appearance=580, at_bat=520, hit=140, double=25, triple=1, home_run=27, bb=55, hbp=4, pace=0.1),
+    Hitter("허경민", plate_appearance=530, at_bat=480, hit=135, double=18, triple=2, home_run=9, bb=35, hbp=4, pace=0.2),
+    Hitter("정수빈", plate_appearance=610, at_bat=560, hit=150, double=20, triple=4, home_run=5, bb=50, hbp=6, pace=0.4),
+    Hitter("김인태", plate_appearance=450, at_bat=400, hit=105, double=10, triple=0, home_run=8, bb=28, hbp=3, pace=0.2),
+    Hitter("강승호", plate_appearance=490, at_bat=440, hit=110, double=22, triple=1, home_run=19, bb=30, hbp=2, pace=0.3),
+    Hitter("박계범", plate_appearance=380, at_bat=340, hit=85, double=12, triple=1, home_run=5, bb=20, hbp=2, pace=0.1)
 ]
 
 # 데이터베이스 경로 설정
