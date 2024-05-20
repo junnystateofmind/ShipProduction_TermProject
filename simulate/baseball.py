@@ -11,7 +11,7 @@ class Hitter:
         self.home_run = home_run
         self.bb = bb
         self.hbp = hbp
-        self.pace = pace # 주력에 따라 한 베이스를 더 뛸 수 있는 능력
+        self.pace = pace  # 주력에 따라 한 베이스를 더 뛸 수 있는 능력
 
     def single_prob(self):
         return (self.hit - self.double - self.triple - self.home_run) / self.at_bat
@@ -52,7 +52,7 @@ class Diamond:
                 if i == 3:
                     self.score += 1  # 3루 주자가 홈으로 들어옴
                 else:
-                    next_base = i + 2 if runners[i].runner_run_when_hit() else i + 1
+                    next_base = i + 1 if not runners[i].runner_run_when_hit() else i + 2
                     if next_base < 3:
                         self.base[next_base] = runners[i]
                     else:
@@ -67,7 +67,7 @@ class Diamond:
                 if i >= 2:
                     self.score += 1  # 2루 이상 주자가 홈으로 들어옴
                 else:
-                    next_base = i + 2 if runners[i].runner_run_when_hit() else i + 1 # 주자가 두 베이스를 더 뛸 수 있는 능력이 있으면 2루로 이동
+                    next_base = i + 2 if not runners[i].runner_run_when_hit() else i + 3
                     if next_base < 3:
                         self.base[next_base] = runners[i]
                     else:
@@ -106,10 +106,8 @@ class Diamond:
             self.base[1] = self.base[0]
             self.base[0] = hitter
         else:
-            self.score += 1  # 만루 상황에서 볼넷으로 득점
-            self.base[2] = self.base[1]
-            self.base[1] = self.base[0]
-            self.base[0] = hitter
+            self.score += 1  # 주자가 홈으로 들어옴
+            self.base = [hitter, self.base[0], self.base[1]]  # 기존 주자들 이동
 
     def hit_by_pitch(self, hitter):
         self.base_on_balls(hitter)
