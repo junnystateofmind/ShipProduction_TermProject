@@ -118,7 +118,7 @@ def simulate_inning(env, lineup, inning_scores, game_id, inning_log):
 def simulate_game(lineup, game_id, inning_log):
     inning_scores = []
     env = simpy.Environment()
-    for inning in range(1, 541): # 9 이닝 * 60 경기
+    for inning in range(1, 91): # 9 이닝 * 10 경기
         env.process(simulate_inning(env, lineup, inning_scores, game_id, inning_log))
         env.run()
     avg_score = np.mean(inning_scores) * 9
@@ -215,15 +215,15 @@ def merge_results_from_temp_files(temp_dir, db_path):
 # ]
 
 players_data = [
-    Hitter("구자욱" , plate_appearance=201, at_bat=178, hit=53, double=11, triple=1, home_run=8, bb=15, hp=6, pace=0.3),
-    Hitter("김헌곤" , plate_appearance=98, at_bat=88, hit=28, double=4, triple=0, home_run=4, bb=8, hp=1, pace=0.2),
-    Hitter("맥키넌" , plate_appearance=183, at_bat=151, hit=53, double=7, triple=1, home_run=4, bb=29, hp=0, pace=0.1),
-    Hitter("김영웅" , plate_appearance=194, at_bat=170, hit=51, double=8, triple=1, home_run=11, bb=21, hp=2, pace=0.3),
-    Hitter("류지혁" , plate_appearance=98, at_bat=83, hit=25, double=2, triple=1, home_run=1, bb=12, hp=1, pace=0.3),
-    Hitter("이재현" , plate_appearance=121, at_bat=112, hit=31, double=8, triple=1, home_run=4, bb=14, hp=0, pace=0.2),
-    Hitter("강민호" , plate_appearance=144, at_bat=130, hit=34, double=2, triple=0, home_run=2, bb=12, hp=2, pace=0.1),
-    Hitter("오재일" , plate_appearance=57, at_bat=51, hit=11, double=4, triple=1, home_run=2, bb=6, hp=0, pace=0.1),
-    Hitter("이성규" , plate_appearance=102, at_bat=80, hit=19, double=4, triple=0, home_run=7, bb=11, hp=6, pace=0.3),
+    Hitter("구자욱" , plate_appearance=201, at_bat=178, hit=53, double=11, triple=1, home_run=8, bb=15, hbp=6, pace=0.3),
+    Hitter("김헌곤" , plate_appearance=98, at_bat=88, hit=28, double=4, triple=0, home_run=4, bb=8, hbp=1, pace=0.2),
+    Hitter("맥키넌" , plate_appearance=183, at_bat=151, hit=53, double=7, triple=1, home_run=4, bb=29, hbp=0, pace=0.1),
+    Hitter("김영웅" , plate_appearance=194, at_bat=170, hit=51, double=8, triple=1, home_run=11, bb=21, hbp=2, pace=0.3),
+    Hitter("류지혁" , plate_appearance=98, at_bat=83, hit=25, double=2, triple=1, home_run=1, bb=12, hbp=1, pace=0.3),
+    Hitter("이재현" , plate_appearance=121, at_bat=112, hit=31, double=8, triple=1, home_run=4, bb=14, hbp=0, pace=0.2),
+    Hitter("강민호" , plate_appearance=144, at_bat=130, hit=34, double=2, triple=0, home_run=2, bb=12, hbp=2, pace=0.1),
+    Hitter("오재일" , plate_appearance=57, at_bat=51, hit=11, double=4, triple=1, home_run=2, bb=6, hbp=0, pace=0.1),
+    Hitter("이성규" , plate_appearance=102, at_bat=80, hit=19, double=4, triple=0, home_run=7, bb=11, hbp=6, pace=0.3),
 ]
 # 데이터베이스 경로 설정
 db_path = '../database/simulation_results.db'
