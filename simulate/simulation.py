@@ -79,20 +79,22 @@ def at_bat(env, diamond, lineup, current_batter_index, inning, at_bat_number, ga
     hitter = lineup[current_batter_index]
     result = simulate_at_bat(hitter)
 
-    if result == 'hit':
-        diamond.hit(hitter)
-    elif result == 'double':
-        diamond.double(hitter)
-    elif result == 'triple':
-        diamond.triple(hitter)
-    elif result == 'home_run':
-        diamond.home_run(hitter)
-    elif result == 'base_on_balls':
+    # 먼저 base_on_balls와 hit_by_pitch를 처리해야, 확률 계산이 올바르게 됨
+    if result == 'base_on_balls' or result == 'hit_by_pitch':
         diamond.base_on_balls(hitter)
-    elif result == 'hit_by_pitch':
-        diamond.hit_by_pitch(hitter)
+        inning_log.append((game_id, inning, at_bat_number, hitter.name, result, diamond.score))
+        return
     else:
-        diamond.out()
+        if result == 'hit':
+            diamond.hit(hitter)
+        elif result == 'double':
+            diamond.double(hitter)
+        elif result == 'triple':
+            diamond.triple(hitter)
+        elif result == 'home_run':
+            diamond.home_run(hitter)
+        else:
+            diamond.out()
 
     inning_log.append((game_id, inning, at_bat_number, hitter.name, result, diamond.score))
     yield env.timeout(1)
@@ -200,18 +202,29 @@ def merge_results_from_temp_files(temp_dir, db_path):
 
 
 # 선수 데이터
-players_data = [
-    Hitter("호세 페르난데스", plate_appearance=600, at_bat=550, hit=170, double=25, triple=1, home_run=14, bb=45, hbp=5, pace=0.2),
-    Hitter("양의지", plate_appearance=520, at_bat=470, hit=153, double=30, triple=1, home_run=18, bb=40, hbp=3, pace=0.2),
-    Hitter("양석환", plate_appearance=540, at_bat=490, hit=130, double=20, triple=0, home_run=25, bb=40, hbp=2, pace=0.1),
-    Hitter("김재환", plate_appearance=580, at_bat=520, hit=140, double=25, triple=1, home_run=27, bb=55, hbp=4, pace=0.1),
-    Hitter("허경민", plate_appearance=530, at_bat=480, hit=135, double=18, triple=2, home_run=9, bb=35, hbp=4, pace=0.2),
-    Hitter("정수빈", plate_appearance=610, at_bat=560, hit=150, double=20, triple=4, home_run=5, bb=50, hbp=6, pace=0.4),
-    Hitter("김인태", plate_appearance=450, at_bat=400, hit=105, double=10, triple=0, home_run=8, bb=28, hbp=3, pace=0.2),
-    Hitter("강승호", plate_appearance=490, at_bat=440, hit=110, double=22, triple=1, home_run=19, bb=30, hbp=2, pace=0.3),
-    Hitter("박계범", plate_appearance=380, at_bat=340, hit=85, double=12, triple=1, home_run=5, bb=20, hbp=2, pace=0.1)
-]
+# players_data = [
+#     Hitter("호세 페르난데스", plate_appearance=600, at_bat=550, hit=170, double=25, triple=1, home_run=14, bb=45, hbp=5, pace=0.2),
+#     Hitter("양의지", plate_appearance=520, at_bat=470, hit=153, double=30, triple=1, home_run=18, bb=40, hbp=3, pace=0.2),
+#     Hitter("양석환", plate_appearance=540, at_bat=490, hit=130, double=20, triple=0, home_run=25, bb=40, hbp=2, pace=0.1),
+#     Hitter("김재환", plate_appearance=580, at_bat=520, hit=140, double=25, triple=1, home_run=27, bb=55, hbp=4, pace=0.1),
+#     Hitter("허경민", plate_appearance=530, at_bat=480, hit=135, double=18, triple=2, home_run=9, bb=35, hbp=4, pace=0.2),
+#     Hitter("정수빈", plate_appearance=610, at_bat=560, hit=150, double=20, triple=4, home_run=5, bb=50, hbp=6, pace=0.4),
+#     Hitter("김인태", plate_appearance=450, at_bat=400, hit=105, double=10, triple=0, home_run=8, bb=28, hbp=3, pace=0.2),
+#     Hitter("강승호", plate_appearance=490, at_bat=440, hit=110, double=22, triple=1, home_run=19, bb=30, hbp=2, pace=0.3),
+#     Hitter("박계범", plate_appearance=380, at_bat=340, hit=85, double=12, triple=1, home_run=5, bb=20, hbp=2, pace=0.1)
+# ]
 
+players_data = [
+    Hitter("구자욱" , plate_appearance=201, at_bat=178, hit=53, double=11, triple=1, home_run=8, bb=15, hp=6, pace=0.3),
+    Hitter("김헌곤" , plate_appearance=98, at_bat=88, hit=28, double=4, triple=0, home_run=4, bb=8, hp=1, pace=0.2),
+    Hitter("맥키넌" , plate_appearance=183, at_bat=151, hit=53, double=7, triple=1, home_run=4, bb=29, hp=0, pace=0.1),
+    Hitter("김영웅" , plate_appearance=194, at_bat=170, hit=51, double=8, triple=1, home_run=11, bb=21, hp=2, pace=0.3),
+    Hitter("류지혁" , plate_appearance=98, at_bat=83, hit=25, double=2, triple=1, home_run=1, bb=12, hp=1, pace=0.3),
+    Hitter("이재현" , plate_appearance=121, at_bat=112, hit=31, double=8, triple=1, home_run=4, bb=14, hp=0, pace=0.2),
+    Hitter("강민호" , plate_appearance=144, at_bat=130, hit=34, double=2, triple=0, home_run=2, bb=12, hp=2, pace=0.1),
+    Hitter("오재일" , plate_appearance=57, at_bat=51, hit=11, double=4, triple=1, home_run=2, bb=6, hp=0, pace=0.1),
+    Hitter("이성규" , plate_appearance=102, at_bat=80, hit=19, double=4, triple=0, home_run=7, bb=11, hp=6, pace=0.3),
+]
 # 데이터베이스 경로 설정
 db_path = '../database/simulation_results.db'
 
