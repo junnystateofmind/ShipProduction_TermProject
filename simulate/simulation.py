@@ -57,6 +57,7 @@ def save_inning_log_to_db(db_path, log_entries):
     conn.close()
 
 
+
 def simulate_at_bat(hitter):
     result = np.random.rand()
     if result < hitter.single_prob():
@@ -74,7 +75,6 @@ def simulate_at_bat(hitter):
     else:
         return 'out'
 
-
 def at_bat(env, diamond, lineup, current_batter_index, inning, at_bat_number, game_id, inning_log):
     hitter = lineup[current_batter_index]
     result = simulate_at_bat(hitter)
@@ -83,7 +83,6 @@ def at_bat(env, diamond, lineup, current_batter_index, inning, at_bat_number, ga
     if result == 'base_on_balls' or result == 'hit_by_pitch':
         diamond.base_on_balls(hitter)
         inning_log.append((game_id, inning, at_bat_number, hitter.name, result, diamond.score))
-        return
     else:
         if result == 'hit':
             diamond.hit(hitter)
@@ -93,10 +92,17 @@ def at_bat(env, diamond, lineup, current_batter_index, inning, at_bat_number, ga
             diamond.triple(hitter)
         elif result == 'home_run':
             diamond.home_run(hitter)
-        else:
-            diamond.out()
+        elif result == 'out':
+            if diamond.outs % 3 < 2 and diamond.base[0] is not None:
+                diamond.double_play()
+                result = 'double_play'
+            else:
+                diamond.out()
+        else :
+            raise ValueError(f"Invalid result: {result}")
 
-    inning_log.append((game_id, inning, at_bat_number, hitter.name, result, diamond.score))
+        inning_log.append((game_id, inning, at_bat_number, hitter.name, result, diamond.score))
+
     yield env.timeout(1)
 
 

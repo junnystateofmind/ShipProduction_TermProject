@@ -116,3 +116,18 @@ class Diamond:
         self.outs += 1
         if self.outs % 3 == 0:
             self.clear_base()
+
+    def double_play(self):
+        # Double play is possible if there are less than 2 outs
+        if self.outs % 3 < 2:
+            if self.base[0] is not None:  # There is a runner on 1st base
+                if self.base[1] is not None:  # There is also a runner on 2nd base
+                    self.outs += 2  # Two outs are made
+                    self.base[1] = None
+                    self.base[0] = None
+                else:  # Only runner on 1st base
+                    self.outs += 2  # Two outs are made
+                    self.base[0] = None
+                # Check if inning ends
+                if self.outs % 3 == 0:
+                    self.clear_base()
